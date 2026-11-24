@@ -23,6 +23,8 @@ celebi_diagnostics = []
 reset = ["celebi_natural"]
 # Tin Tower Suicune variant of Reset: same unmodified-RNG policy.
 suicune = ["celebi_natural"]
+hooh = ["celebi_natural"]
+lugia = ["celebi_natural"]
 rng = ["celebi_resolver_manual"]
 
 [lib]

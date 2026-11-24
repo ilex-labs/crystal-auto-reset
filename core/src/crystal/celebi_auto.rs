@@ -13,6 +13,16 @@ pub const fn suicune_mode() -> bool {
     cfg!(feature = "suicune")
 }
 
+/// Ho-Oh / Lugia: talk to a static overworld sprite with one A press.
+pub const fn static_mode() -> bool {
+    cfg!(any(feature = "hooh", feature = "lugia"))
+}
+
+/// Any target whose save starts on the overworld (no GS Ball dialog).
+pub const fn overworld_mode() -> bool {
+    suicune_mode() || static_mode()
+}
+
 #[cfg(all(feature = "celebi_natural", feature = "celebi_resolver"))]
 compile_error!("celebi_natural and celebi_resolver are mutually exclusive");
 
@@ -493,7 +503,11 @@ impl Bot {
             return Output { motion: Motion::Run, buttons: PAD_UP };
         }
         if self.stage == Stage::NaturalA {
-            if !s.gs_position {
+            if static_mode() {
+                if !s.world || !s.shrine || obs.map != START_MAP || obs.battle != 0 {
+                    return self.stop("Left start tile before A");
+                }
+            } else if !s.gs_position {
                 return self.stop("GS text lost before natural A");
             }
             if s.wram_bank & 7 > 1 {
@@ -628,13 +642,15 @@ impl Bot {
                     if !s.shrine || obs.map != START_MAP {
                         return self.stop(if suicune_mode() {
                             "Save not below Tin Tower door"
+                        } else if static_mode() {
+                            "Save not facing legendary"
                         } else {
                             "Save not at shrine start"
                         });
                     }
-                    if suicune_mode() {
-                        // No dialog precedes the door. Wait the disclosed
-                        // human-like response time, then press Up once.
+                    if overworld_mode() {
+                        // No dialog precedes the input. Wait the disclosed
+                        // human-like response time, then press Up / A once.
                         self.held = 0;
                         self.prepare_natural_delay();
                         self.enter(Stage::NaturalDelay, "Reset timing: original RNG");
@@ -710,9 +726,9 @@ impl Bot {
             }
             Stage::NaturalDelay => {
                 self.held = 0;
-                if suicune_mode() {
+                if overworld_mode() {
                     if !s.world || !s.shrine || obs.map != START_MAP || obs.battle != 0 {
-                        return self.stop("Moved off Tin Tower door");
+                        return self.stop("Moved off start tile");
                     }
                 } else if !s.gs_position {
                     return self.stop("GS text lost during natural delay");

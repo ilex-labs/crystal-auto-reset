@@ -266,7 +266,7 @@ pub extern "C" fn celebi_auto_service(paused: bool, physical_keys: u32, cpu_mhz:
             }
         }
         let previous = BOT.stage;
-        let suicune_prompt = cfg!(feature = "suicune") && previous == Stage::Load;
+        let suicune_prompt = super::celebi_auto::overworld_mode() && previous == Stage::Load;
         if natural_mode() && (previous == Stage::Track || suicune_prompt) {
             // A human cannot condition reaction time on hidden game RNG. Use
             // only independent host time at the visible prompt (plus attempt
@@ -424,10 +424,7 @@ pub extern "C" fn celebi_auto_draw() {
     // Public release screens are deliberately small. Development diagnostics
     // are a separate opt-in build and never appear in the release binaries.
     if bot.stage == Stage::Shiny {
-        #[cfg(feature = "suicune")]
-        pnp::println!("SHINY SUICUNE FOUND!");
-        #[cfg(not(feature = "suicune"))]
-        pnp::println!("SHINY CELEBI FOUND!");
+        pnp::println!("SHINY {} FOUND!", super::celebi_session::TARGET_NAME);
         if let Some(dvs) = bot.session.result {
             pnp::println!("DVs {:02X} {:02X}", dvs[0], dvs[1]);
         }
@@ -436,10 +433,7 @@ pub extern "C" fn celebi_auto_draw() {
         return;
     }
     if bot.stage == Stage::Stopped {
-        #[cfg(feature = "suicune")]
-        pnp::println!("SUICUNE AUTO STOPPED");
-        #[cfg(not(feature = "suicune"))]
-        pnp::println!("CELEBI AUTO STOPPED");
+        pnp::println!("{} AUTO STOPPED", super::celebi_session::TARGET_NAME);
         pnp::println!("{}", bot.message);
         pnp::println!("Attempts {}", bot.attempts);
         pnp::println!("R: continue + hide");
@@ -458,10 +452,11 @@ pub extern "C" fn celebi_auto_draw() {
     {
         #[cfg(feature = "celebi_natural")]
         {
-            #[cfg(feature = "suicune")]
-            pnp::println!("SUICUNE RESET (CH 1.0.0 fork)");
-            #[cfg(not(feature = "suicune"))]
-            pnp::println!("CELEBIHUNTER RESET 1.0.0");
+            if super::celebi_auto::overworld_mode() {
+                pnp::println!("{} RESET (CH 1.0.0 fork)", super::celebi_session::TARGET_NAME);
+            } else {
+                pnp::println!("CELEBIHUNTER RESET 1.0.0");
+            }
             pnp::println!("{}", bot.message);
             if bot.stage == Stage::NaturalDelay {
                 pnp::println!("Input in {} frames", bot.natural_delay_remaining);

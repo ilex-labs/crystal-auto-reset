@@ -6,29 +6,47 @@ const MAX_AUTO_RESEARCHES: u8 = 32;
 // Retained only for the legacy diagnostic screen text. Runtime authorization
 // uses `supported_cpu_mhz` below.
 pub const EXPECTED_CPU_MHZ: u32 = 268;
-// Encounter target. Celebi: Ilex Forest shrine (3,52), species 251 Lv30.
-// Suicune: player stands in Ecruteak City (4,9) below the Tin Tower door;
-// entering Tin Tower 1F (3,4) runs TinTower1FSuicuneBattleScript, which
-// starts a Lv40 Suicune battle with no text box and no further input.
-#[cfg(not(feature = "suicune"))]
-pub const START_MAP: (u8, u8) = (3, 52);
-#[cfg(not(feature = "suicune"))]
-pub const TARGET_SPECIES: u8 = 251;
-#[cfg(not(feature = "suicune"))]
-pub const TARGET_LEVEL: u8 = 30;
+// Encounter targets (map group, number); player tile (x, y), facing up.
+// Celebi: Ilex Forest shrine, Lv30, GS Ball dialog then A.
+// Suicune: Ecruteak City below the Tin Tower door; stepping in (Tin Tower 1F,
+//   3:4) runs TinTower1FSuicuneBattleScript: Lv40, no text box, no input.
+// Ho-Oh: Tin Tower roof (15:12); Lugia: Whirl Islands chamber (3:73). Both
+//   stand at (9,5); the player talks from (9,6) facing up. The script prints
+//   one cry text with no waitbutton and starts a Lv60 battle: one A press.
+#[cfg(not(any(feature = "suicune", feature = "hooh", feature = "lugia")))]
+mod target {
+    pub const START_MAP: (u8, u8) = (3, 52);
+    pub const START_XY: (u8, u8) = (8, 23);
+    pub const TARGET_SPECIES: u8 = 251;
+    pub const TARGET_LEVEL: u8 = 30;
+    pub const TARGET_NAME: &str = "CELEBI";
+}
 #[cfg(feature = "suicune")]
-pub const START_MAP: (u8, u8) = (4, 9);
-#[cfg(feature = "suicune")]
-pub const TARGET_SPECIES: u8 = 245;
-#[cfg(feature = "suicune")]
-pub const TARGET_LEVEL: u8 = 40;
-#[cfg(feature = "suicune")]
-pub const ENCOUNTER_MAP: (u8, u8) = (3, 4);
-// Player tile (x, y) facing up: below the shrine / below the Tin Tower door.
-#[cfg(not(feature = "suicune"))]
-pub const START_XY: (u8, u8) = (8, 23);
-#[cfg(feature = "suicune")]
-pub const START_XY: (u8, u8) = (37, 8);
+mod target {
+    pub const START_MAP: (u8, u8) = (4, 9);
+    pub const START_XY: (u8, u8) = (37, 8);
+    pub const TARGET_SPECIES: u8 = 245;
+    pub const TARGET_LEVEL: u8 = 40;
+    pub const TARGET_NAME: &str = "SUICUNE";
+    pub const ENCOUNTER_MAP: (u8, u8) = (3, 4);
+}
+#[cfg(feature = "hooh")]
+mod target {
+    pub const START_MAP: (u8, u8) = (15, 12);
+    pub const START_XY: (u8, u8) = (9, 6);
+    pub const TARGET_SPECIES: u8 = 250;
+    pub const TARGET_LEVEL: u8 = 60;
+    pub const TARGET_NAME: &str = "HO-OH";
+}
+#[cfg(feature = "lugia")]
+mod target {
+    pub const START_MAP: (u8, u8) = (3, 73);
+    pub const START_XY: (u8, u8) = (9, 6);
+    pub const TARGET_SPECIES: u8 = 249;
+    pub const TARGET_LEVEL: u8 = 60;
+    pub const TARGET_NAME: &str = "LUGIA";
+}
+pub use target::*;
 
 pub const fn supported_cpu_mhz(cpu_mhz: u32) -> bool {
     cpu_mhz == 268 || cpu_mhz == 804
