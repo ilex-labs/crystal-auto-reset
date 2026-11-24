@@ -187,7 +187,7 @@ def compile_elf(mode_build: pathlib.Path, rust_lib: pathlib.Path) -> pathlib.Pat
 
 
 def verify_mode(elf: pathlib.Path, mode: str) -> None:
-    if mode in ("suicune", "hooh", "lugia", "beasts", "beastfinder", "snorlax"):
+    if mode in ("suicune", "hooh", "lugia", "beastfinder", "snorlax"):
         mode = "reset"  # identical release policy and audits
     expected = 1 if mode == "reset" else 3
     if not re.search(r"\bmov\s+r0,\s*#1\b", symbol_body(elf, "celebi_auto_enabled")):
@@ -240,7 +240,7 @@ def build(mode: str) -> pathlib.Path:
     elf = compile_elf(mode_build, rust_lib)
     verify_mode(elf, mode)
 
-    names = {"reset": "Reset", "rng": "RNG", "suicune": "Suicune", "hooh": "HoOh", "lugia": "Lugia", "beasts": "Beasts", "beastfinder": "BeastFinder", "snorlax": "Snorlax"}
+    names = {"reset": "Reset", "rng": "RNG", "suicune": "Suicune", "hooh": "HoOh", "lugia": "Lugia", "beastfinder": "BeastFinder", "snorlax": "Snorlax"}
     output = DIST / f"{names[mode]}.3gx"
     metadata = ROOT / "3gx" / f"{names[mode]}.plgInfo"
     DIST.mkdir(exist_ok=True)
@@ -256,13 +256,13 @@ def build(mode: str) -> pathlib.Path:
 
 
 def main() -> None:
-    flags = {"--reset", "--rng", "--suicune", "--hooh", "--lugia", "--beasts", "--beastfinder", "--snorlax"}
+    flags = {"--reset", "--rng", "--suicune", "--hooh", "--lugia", "--beastfinder", "--snorlax"}
     choices = {arg for arg in sys.argv[1:] if arg in flags}
     if any(arg not in flags for arg in sys.argv[1:]):
-        raise SystemExit("Usage: python tools/build_legacy.py [--reset] [--rng] [--suicune] [--hooh] [--lugia] [--beasts] [--beastfinder] [--snorlax]")
+        raise SystemExit("Usage: python tools/build_legacy.py [--reset] [--rng] [--suicune] [--hooh] [--lugia] [--beastfinder] [--snorlax]")
     modes = [
         value
-        for flag, value in (("--reset", "reset"), ("--rng", "rng"), ("--suicune", "suicune"), ("--hooh", "hooh"), ("--lugia", "lugia"), ("--beasts", "beasts"), ("--beastfinder", "beastfinder"), ("--snorlax", "snorlax"))
+        for flag, value in (("--reset", "reset"), ("--rng", "rng"), ("--suicune", "suicune"), ("--hooh", "hooh"), ("--lugia", "lugia"), ("--beastfinder", "beastfinder"), ("--snorlax", "snorlax"))
         if not choices or flag in choices
     ]
     outputs = [build(mode) for mode in modes]

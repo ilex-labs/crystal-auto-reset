@@ -123,6 +123,30 @@ The plugin reads the current RNG and timing state, including the real DIV and it
 
 Building on [PokeReader](https://github.com/zaksabeast/PokeReader)'s method, this version improves timing reads and simplifies the calculations. It reads the parameters and searches for targets in the plugin, so you do not need to wait for an RNG index or use a separate RNG website. Once the battle starts, the HUD shows Celebi's actual DVs.
 
+## Additional Crystal targets (modified version)
+
+This is a modified version of CelebiHunter, changed in November 2026 by ilex-labs. It is not an official CelebiHunter release. It adds Reset-style builds for other fixed encounters in English Crystal VC. RNG is unchanged.
+
+| Build | Encounter | What it automates | Hardware result |
+|---|---|---|---|
+| `Suicune.3gx` | Tin Tower Suicune, Lv40 | Up into the Tin Tower door | Shiny after 895 attempts |
+| `HoOh.3gx` | Ho-Oh, Tin Tower roof, Lv60 | One A press on the sprite | Shiny after 6,162 attempts |
+| `Lugia.3gx` | Lugia, Whirl Islands, Lv60 | One A press on the sprite | Shiny after 11,425 attempts |
+| `Snorlax.3gx` | Vermilion City Snorlax, Lv50 | Pokégear radio to the Poké Flute channel, then A through the wake-up text | Shiny after 7,133 attempts |
+| `BeastFinder.3gx` | Roaming Raikou and Entei, Route 38 | Steps out of the Route 38 gate, reloads until a beast moves onto the route, paces the grass under Repel, then pauses on the encounter for a manual catch. It does not shiny hunt. | Found both beasts |
+
+Each target is a Cargo feature that changes the start map and tile, the target species and level, and the input sequence. The same unmodified-RNG policy applies: human-like input delay, DVs read and confirmed before the battle screen, reset only after a verified miss. Build with `python tools/build_legacy.py --suicune` (or `--hooh`, `--lugia`, `--snorlax`, `--beastfinder`).
+
+Tested on a New 3DS LL, normal CPU mode, Luma3DS 13.4. Each binary used in those hunts rebuilds byte-for-byte from the commit that added or last changed that target. Later commits change shared code, so builds from the tip are not the exact binaries tested. The Celebi Reset build's behaviour is unchanged and `tests/celebi.rs` passes, but its binary differs from the original v1.0.0.
+
+Setup positions: Suicune, on the tile below the Tin Tower door, facing it. Ho-Oh and Lugia, directly below the sprite, facing it. Snorlax, below Snorlax, facing up. Beasts, inside the Route 38 gate on its exit mat, with a Lv17–40 lead and an active Max Repel.
+
+Pokémon from these builds are auto-hunted. Disclose that where it matters: r/ShinyPokemon requires it, and r/pokemontrades does not allow automated catches.
+
+### AI disclosure
+
+These additions were written with [Claude](https://claude.ai), Anthropic's AI assistant. The maintainer decided what to build and tested every listed build on a real console, but doesn't review the code line by line.
+
 ## Credits
 
 Thanks to these projects and their authors:
@@ -132,3 +156,4 @@ Thanks to these projects and their authors:
 - [Pan Docs](https://gbdev.io/pandocs/) by gbdev: Game Boy timer and interrupt documentation.
 - [Luma3DS](https://github.com/LumaTeam/Luma3DS) by LumaTeam: the 3GX plugin loader and Rosalina debugger.
 - [CTRPluginFramework](https://gitlab.com/thepixellizeross/ctrpluginframework) by The Pixellizer Group and [Blank Template](https://github.com/PabloMK7/CTRPluginFramework-BlankTemplate) by PabloMK7: plugin interfaces and 3GX build references.
+- [gsclua](https://github.com/wwwwwwzx/gsclua) by wwwwwwzx: the Route 38 spot for the roaming beasts (idea only, no code).
