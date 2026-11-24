@@ -233,6 +233,8 @@ pub struct Bot {
     radio_wait: u16,
     radio_tries: u16,
     radio_fail_streak: u8,
+    text_pulses: u8,
+    text_gap: u8,
 }
 impl Bot {
     pub const fn new() -> Self {
@@ -272,6 +274,8 @@ impl Bot {
             radio_wait: 0,
             radio_tries: 0,
             radio_fail_streak: 0,
+            text_pulses: 0,
+            text_gap: 0,
             select_key_latch: 0,
             run_entropy: 0,
         }
@@ -596,6 +600,8 @@ impl Bot {
                 if snorlax_mode() && s.map_music != MUSIC_POKE_FLUTE_CHANNEL {
                     return self.stop("Poke Flute channel stopped");
                 }
+                self.text_pulses = 0;
+                self.text_gap = 30;
             } else if !s.gs_position {
                 return self.stop("GS text lost before natural A");
             }
@@ -963,6 +969,26 @@ impl Bot {
                 }
             }
             Stage::Battle => {
+                // Snorlax: VermilionCityRadioNearSnorlaxText has three button
+                // prompts (cont, para, para) before the battle starts.
+                if snorlax_mode()
+                    && obs.battle == 0
+                    && self.held == 0
+                    && self.released == 0
+                    && self.cooldown == 0
+                    && self.text_pulses < 6
+                {
+                    if self.text_gap > 0 {
+                        self.text_gap -= 1;
+                    } else {
+                        self.held = 1;
+                        self.pulse_start = s.frame;
+                        self.pulse_polls = 0;
+                        self.ack = false;
+                        self.text_pulses += 1;
+                        self.text_gap = 30;
+                    }
+                }
                 self.session.tick(obs, false, Command::None);
                 if self.session.phase == Phase::Shiny {
                     let expected = if resolver_mode() {
