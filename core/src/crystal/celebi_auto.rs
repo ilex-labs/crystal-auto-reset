@@ -27,7 +27,7 @@ pub const fn snorlax_mode() -> bool {
     cfg!(feature = "snorlax")
 }
 
-pub const MUSIC_POKE_FLUTE_CHANNEL: u8 = 0x28;
+pub const MUSIC_POKE_FLUTE_CHANNEL: u8 = 0x40; // constants/music_constants.asm: hex 40
 pub const POKE_FLUTE_KNOB: u8 = 78;
 const PAD_A: u8 = 0x01;
 const PAD_B: u8 = 0x02;
