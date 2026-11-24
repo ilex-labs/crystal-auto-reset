@@ -187,6 +187,8 @@ def compile_elf(mode_build: pathlib.Path, rust_lib: pathlib.Path) -> pathlib.Pat
 
 
 def verify_mode(elf: pathlib.Path, mode: str) -> None:
+    if mode == "suicune":
+        mode = "reset"  # identical release policy and audits
     expected = 1 if mode == "reset" else 3
     if not re.search(r"\bmov\s+r0,\s*#1\b", symbol_body(elf, "celebi_auto_enabled")):
         raise SystemExit("Automatic runtime marker is disabled")
@@ -238,8 +240,9 @@ def build(mode: str) -> pathlib.Path:
     elf = compile_elf(mode_build, rust_lib)
     verify_mode(elf, mode)
 
-    output = DIST / ("Reset.3gx" if mode == "reset" else "RNG.3gx")
-    metadata = ROOT / "3gx" / ("Reset.plgInfo" if mode == "reset" else "RNG.plgInfo")
+    names = {"reset": "Reset", "rng": "RNG", "suicune": "Suicune"}
+    output = DIST / f"{names[mode]}.3gx"
+    metadata = ROOT / "3gx" / f"{names[mode]}.plgInfo"
     DIST.mkdir(exist_ok=True)
     run([THREEGX, "-s", elf, metadata, output])
     data = output.read_bytes()
@@ -253,12 +256,13 @@ def build(mode: str) -> pathlib.Path:
 
 
 def main() -> None:
-    choices = {arg for arg in sys.argv[1:] if arg in {"--reset", "--rng"}}
-    if any(arg not in {"--reset", "--rng"} for arg in sys.argv[1:]):
-        raise SystemExit("Usage: python tools/build.py [--reset] [--rng]")
+    flags = {"--reset", "--rng", "--suicune"}
+    choices = {arg for arg in sys.argv[1:] if arg in flags}
+    if any(arg not in flags for arg in sys.argv[1:]):
+        raise SystemExit("Usage: python tools/build_legacy.py [--reset] [--rng] [--suicune]")
     modes = [
         value
-        for flag, value in (("--reset", "reset"), ("--rng", "rng"))
+        for flag, value in (("--reset", "reset"), ("--rng", "rng"), ("--suicune", "suicune"))
         if not choices or flag in choices
     ]
     outputs = [build(mode) for mode in modes]

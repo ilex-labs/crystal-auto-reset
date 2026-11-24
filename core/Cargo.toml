@@ -21,6 +21,8 @@ celebi_resolver = ["celebi_auto"]
 celebi_resolver_manual = ["celebi_auto"]
 celebi_diagnostics = []
 reset = ["celebi_natural"]
+# Tin Tower Suicune variant of Reset: same unmodified-RNG policy.
+suicune = ["celebi_natural"]
 rng = ["celebi_resolver_manual"]
 
 [lib]

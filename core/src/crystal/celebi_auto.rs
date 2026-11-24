@@ -1,6 +1,17 @@
 //! Automatic controller. Only observed screens authorize forward transitions.
 //! Buttons are transient controller inputs, never writes to saves, RNG, or Pokemon data.
-use super::celebi_session::{supported_cpu_mhz, Command, Observation, Phase, Session};
+use super::celebi_session::{
+    supported_cpu_mhz, Command, Observation, Phase, Session, START_MAP, TARGET_SPECIES,
+};
+#[cfg(feature = "suicune")]
+use super::celebi_session::ENCOUNTER_MAP;
+
+/// hJoypadDown layout: A/B/Select/Start in the low nibble, Right/Left/Up/Down high.
+pub const PAD_UP: u8 = 0x40;
+
+pub const fn suicune_mode() -> bool {
+    cfg!(feature = "suicune")
+}
 
 #[cfg(all(feature = "celebi_natural", feature = "celebi_resolver"))]
 compile_error!("celebi_natural and celebi_resolver are mutually exclusive");
@@ -44,6 +55,8 @@ pub enum Stage {
     SelectDvs,
     NaturalDelay,
     NaturalA,
+    // Suicune only: hold Up into the Tin Tower door until Tin Tower 1F loads.
+    Walk,
     Search,
     DirectA,
     Advance,
@@ -461,6 +474,24 @@ impl Bot {
                 buttons: 1,
             };
         }
+        if self.stage == Stage::NaturalA && suicune_mode() {
+            if !s.world || !s.shrine || obs.map != START_MAP {
+                return self.stop("Left Tin Tower door before Up");
+            }
+            if s.wram_bank & 7 > 1 {
+                return self.stop("WRAM unavailable for Up");
+            }
+            if !self.session.trigger_unmodified_now(obs) {
+                return self.stop(self.session.message);
+            }
+            self.enter(Stage::Walk, "Up: entering Tin Tower");
+            self.held = PAD_UP;
+            self.released = 0;
+            self.ack = false;
+            self.pulse_polls = 0;
+            self.attempts += 1;
+            return Output { motion: Motion::Run, buttons: PAD_UP };
+        }
         if self.stage == Stage::NaturalA {
             if !s.gs_position {
                 return self.stop("GS text lost before natural A");
@@ -594,8 +625,20 @@ impl Bot {
             }
             Stage::Load => {
                 if s.world {
-                    if !s.shrine || obs.map != (3, 52) {
-                        return self.stop("Save not at shrine start");
+                    if !s.shrine || obs.map != START_MAP {
+                        return self.stop(if suicune_mode() {
+                            "Save not below Tin Tower door"
+                        } else {
+                            "Save not at shrine start"
+                        });
+                    }
+                    if suicune_mode() {
+                        // No dialog precedes the door. Wait the disclosed
+                        // human-like response time, then press Up once.
+                        self.held = 0;
+                        self.prepare_natural_delay();
+                        self.enter(Stage::NaturalDelay, "Reset timing: original RNG");
+                        return Output { motion: Motion::Run, buttons: 0 };
                     }
                     self.enter(Stage::Shrine, "Advancing shrine dialog");
                 } else if s.save_info {
@@ -603,7 +646,7 @@ impl Bot {
                 }
             }
             Stage::Shrine => {
-                if obs.map != (3, 52) || obs.battle != 0 {
+                if obs.map != START_MAP || obs.battle != 0 {
                     return self.stop("Shrine context changed");
                 }
                 if s.gs {
@@ -667,7 +710,11 @@ impl Bot {
             }
             Stage::NaturalDelay => {
                 self.held = 0;
-                if !s.gs_position {
+                if suicune_mode() {
+                    if !s.world || !s.shrine || obs.map != START_MAP || obs.battle != 0 {
+                        return self.stop("Moved off Tin Tower door");
+                    }
+                } else if !s.gs_position {
                     return self.stop("GS text lost during natural delay");
                 }
                 if paused {
@@ -682,6 +729,28 @@ impl Bot {
                     } else {
                         motion = Motion::Run;
                     }
+                }
+            }
+            Stage::Walk => {
+                #[cfg(feature = "suicune")]
+                {
+                    if obs.map == ENCOUNTER_MAP {
+                        // Release Up as soon as Tin Tower 1F is loaded. The
+                        // battle script moves the player itself; no further
+                        // input is sent until the result is verified.
+                        self.held = 0;
+                        self.enter(Stage::Battle, "Cutscene: game chooses DVs");
+                    } else if obs.map != START_MAP {
+                        return self.stop("Unexpected map after Up");
+                    } else if obs.battle != 0 {
+                        return self.stop("Unexpected battle before door");
+                    } else if self.polls > 600 {
+                        return self.stop("Door not entered");
+                    }
+                }
+                #[cfg(not(feature = "suicune"))]
+                {
+                    return self.stop("Walk stage is Suicune-only");
                 }
             }
             Stage::Search => {
@@ -772,7 +841,7 @@ impl Bot {
                     motion = Motion::Pause;
                 } else if self.session.phase == Phase::Miss {
                     // Recheck fresh current data before discarding this encounter.
-                    if self.session.result != Some(obs.dvs) || obs.battle != 1 || obs.species != 251 {
+                    if self.session.result != Some(obs.dvs) || obs.battle != 1 || obs.species != TARGET_SPECIES {
                         return self.stop("Result changed; no reset");
                     }
                     if super::celebi_rng::shiny(obs.dvs[0], obs.dvs[1]) {
@@ -836,12 +905,17 @@ impl Bot {
 }
 
 pub fn joyp_with_buttons(raw: u8, buttons: u8) -> u8 {
-    // GB JOYP bit 5 low selects A/B/Select/Start, which are active-low.
+    // GB JOYP bit 5 low selects A/B/Select/Start, bit 4 low selects the
+    // d-pad (Right/Left/Up/Down). Both are active-low. `buttons` uses the
+    // hJoypadDown layout: buttons low nibble, d-pad high nibble.
+    let mut value = raw;
     if raw & 0x20 == 0 {
-        raw & !(buttons & 15)
-    } else {
-        raw
+        value &= !(buttons & 15);
     }
+    if raw & 0x10 == 0 {
+        value &= !((buttons >> 4) & 15);
+    }
+    value
 }
 
 pub fn joyp_buttons_for_stage(stage: Stage, buttons: u8) -> u8 {
@@ -852,6 +926,7 @@ pub fn joyp_buttons_for_stage(stage: Stage, buttons: u8) -> u8 {
         | Stage::Continue
         | Stage::Load
         | Stage::Shrine
+        | Stage::Walk
         | Stage::Battle
         | Stage::Reset => buttons,
         _ => 0,
@@ -864,7 +939,7 @@ pub fn host_buttons_for_stage(stage: Stage, buttons: u8) -> u8 {
     // Battle A stays JOYP-only; the two earlier HID experiments were not
     // consumed by Crystal VC.
     match stage {
-        Stage::Title | Stage::Continue | Stage::Load | Stage::Shrine | Stage::Reset => buttons,
+        Stage::Title | Stage::Continue | Stage::Load | Stage::Shrine | Stage::Walk | Stage::Reset => buttons,
         _ => 0,
     }
 }

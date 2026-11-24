@@ -141,8 +141,9 @@ fn screen(stage: Stage) -> Screen {
         cursor: gb_mem::read_u8(0xcfa9),
         save_info: unsafe { TEXT_SAVE_INFO },
         world,
-        shrine: gb_mem::read_u8(0xdcb8) == 8
-            && gb_mem::read_u8(0xdcb7) == 23
+        // Start tile, facing up, no script running (wScriptMode == 0).
+        shrine: gb_mem::read_u8(0xdcb8) == super::celebi_session::START_XY.0
+            && gb_mem::read_u8(0xdcb7) == super::celebi_session::START_XY.1
             && gb_mem::read_u8(0xd4de) & 12 == 4
             && gb_mem::read_u8(0xd437) == 0,
         dialog: bank == 0x1b && (0x6e39..=0x6e42).contains(&pos),
@@ -265,7 +266,8 @@ pub extern "C" fn celebi_auto_service(paused: bool, physical_keys: u32, cpu_mhz:
             }
         }
         let previous = BOT.stage;
-        if natural_mode() && previous == Stage::Track {
+        let suicune_prompt = cfg!(feature = "suicune") && previous == Stage::Load;
+        if natural_mode() && (previous == Stage::Track || suicune_prompt) {
             // A human cannot condition reaction time on hidden game RNG. Use
             // only independent host time at the visible prompt (plus attempt
             // number inside Bot) to choose the disclosed timing profile.
@@ -422,6 +424,9 @@ pub extern "C" fn celebi_auto_draw() {
     // Public release screens are deliberately small. Development diagnostics
     // are a separate opt-in build and never appear in the release binaries.
     if bot.stage == Stage::Shiny {
+        #[cfg(feature = "suicune")]
+        pnp::println!("SHINY SUICUNE FOUND!");
+        #[cfg(not(feature = "suicune"))]
         pnp::println!("SHINY CELEBI FOUND!");
         if let Some(dvs) = bot.session.result {
             pnp::println!("DVs {:02X} {:02X}", dvs[0], dvs[1]);
@@ -431,6 +436,9 @@ pub extern "C" fn celebi_auto_draw() {
         return;
     }
     if bot.stage == Stage::Stopped {
+        #[cfg(feature = "suicune")]
+        pnp::println!("SUICUNE AUTO STOPPED");
+        #[cfg(not(feature = "suicune"))]
         pnp::println!("CELEBI AUTO STOPPED");
         pnp::println!("{}", bot.message);
         pnp::println!("Attempts {}", bot.attempts);
@@ -450,12 +458,15 @@ pub extern "C" fn celebi_auto_draw() {
     {
         #[cfg(feature = "celebi_natural")]
         {
+            #[cfg(feature = "suicune")]
+            pnp::println!("SUICUNE RESET (CH 1.0.0 fork)");
+            #[cfg(not(feature = "suicune"))]
             pnp::println!("CELEBIHUNTER RESET 1.0.0");
             pnp::println!("{}", bot.message);
             if bot.stage == Stage::NaturalDelay {
-                pnp::println!("A in {} frames", bot.natural_delay_remaining);
+                pnp::println!("Input in {} frames", bot.natural_delay_remaining);
             } else {
-                pnp::println!("Final A: automatic");
+                pnp::println!("Final input: automatic");
             }
             pnp::println!("Attempts {}", bot.attempts);
             pnp::println!("B: stop");

@@ -6,6 +6,30 @@ const MAX_AUTO_RESEARCHES: u8 = 32;
 // Retained only for the legacy diagnostic screen text. Runtime authorization
 // uses `supported_cpu_mhz` below.
 pub const EXPECTED_CPU_MHZ: u32 = 268;
+// Encounter target. Celebi: Ilex Forest shrine (3,52), species 251 Lv30.
+// Suicune: player stands in Ecruteak City (4,9) below the Tin Tower door;
+// entering Tin Tower 1F (3,4) runs TinTower1FSuicuneBattleScript, which
+// starts a Lv40 Suicune battle with no text box and no further input.
+#[cfg(not(feature = "suicune"))]
+pub const START_MAP: (u8, u8) = (3, 52);
+#[cfg(not(feature = "suicune"))]
+pub const TARGET_SPECIES: u8 = 251;
+#[cfg(not(feature = "suicune"))]
+pub const TARGET_LEVEL: u8 = 30;
+#[cfg(feature = "suicune")]
+pub const START_MAP: (u8, u8) = (4, 9);
+#[cfg(feature = "suicune")]
+pub const TARGET_SPECIES: u8 = 245;
+#[cfg(feature = "suicune")]
+pub const TARGET_LEVEL: u8 = 40;
+#[cfg(feature = "suicune")]
+pub const ENCOUNTER_MAP: (u8, u8) = (3, 4);
+// Player tile (x, y) facing up: below the shrine / below the Tin Tower door.
+#[cfg(not(feature = "suicune"))]
+pub const START_XY: (u8, u8) = (8, 23);
+#[cfg(feature = "suicune")]
+pub const START_XY: (u8, u8) = (37, 8);
+
 pub const fn supported_cpu_mhz(cpu_mhz: u32) -> bool {
     cpu_mhz == 268 || cpu_mhz == 804
 }
@@ -56,7 +80,7 @@ impl Observation {
             Some("CPU query unavailable")
         } else if !supported_cpu_mhz(self.cpu_mhz) {
             Some("CPU mismatch; see values")
-        } else if self.map != (3, 52) {
+        } else if self.map != START_MAP {
             Some("Map mismatch; see values")
         } else {
             None
@@ -67,8 +91,8 @@ impl Observation {
     }
     fn encounter_ready(&self) -> bool {
         self.battle == 1
-            && self.species == 251
-            && self.level == 30
+            && self.species == TARGET_SPECIES
+            && self.level == TARGET_LEVEL
             && self.hp > 0
             && self.hp <= self.max_hp
             && self.battle_ended == 0
