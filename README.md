@@ -40,7 +40,7 @@ Every attempt reloads your in-game save, so the save decides where the plugin st
 ### Suicune
 
 - Have the Tin Tower Suicune encounter ready to trigger, with Suicune not yet battled there.
-- Stand in Ecruteak City on the tile directly below the Tin Tower entrance, **facing up** at the door, and save.
+- Stand on the tile directly below the door of Tin Tower itself, **facing up** at the door, and save. This is the tower's own door in the northeast of Ecruteak City, past the gatehouse with the sages, not the gatehouse door.
 - The plugin presses Up to walk in. The game's own cutscene moves you to Suicune and starts the battle.
 
 ### Ho-Oh
