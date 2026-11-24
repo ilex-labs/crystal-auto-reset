@@ -35,38 +35,63 @@ Japanese Crystal is **not supported**.
 
 ## Before you start: the save point
 
-Every attempt reloads your in-game save, so the save decides where the plugin starts. Save at the exact spot below for your target. If the plugin finds you anywhere else, it stops and tells you on screen instead of pressing anything.
+Every attempt reloads your in-game save, so the save decides where the plugin starts. Save at the exact spot below for your target. The pictures were taken during a test run of the plugins in an emulator (see [Dry run](#dry-run-in-an-emulator)). If the plugin finds you anywhere else, it stops and tells you on screen instead of pressing anything.
 
 ### Suicune
 
-- Have the Tin Tower Suicune encounter ready to trigger, with Suicune not yet battled there.
+<img src="docs/images/spot-suicune.png" alt="Player standing below the Tin Tower door, facing up" width="320">
+
+- You haven't battled Suicune at Tin Tower yet, and you can reach the tower's door.
 - Stand on the tile directly below the door of Tin Tower itself, **facing up** at the door, and save. This is the tower's own door in the northeast of Ecruteak City, past the gatehouse with the sages, not the gatehouse door.
+- To face the door without walking in, step down one tile and back up.
 - The plugin presses Up to walk in. The game's own cutscene moves you to Suicune and starts the battle.
 
 ### Ho-Oh
+
+<img src="docs/images/spot-hooh.png" alt="Player on the Tin Tower roof, directly below Ho-Oh, facing up" width="320">
 
 - Stand on the Tin Tower roof on the tile directly below Ho-Oh, **facing up** at it, and save.
 - The plugin presses A once.
 
 ### Lugia
 
-- Stand in Lugia's chamber in the Whirl Islands on the tile directly below Lugia, **facing up** at it, and save.
+<img src="docs/images/spot-lugia.png" alt="Player surfing directly below Lugia, facing up" width="320">
+
+- Lugia sits in the water, so **Surf** up to the tile directly below it, **facing up** at it, and save while still surfing.
+- The picture was taken with Flash used. Without Flash the chamber is dark, which makes no difference to the plugin.
 - The plugin presses A once.
 
 ### Snorlax
 
+<img src="docs/images/spot-snorlax.png" alt="Player below the left half of Snorlax, facing up" width="320">
+
 - You need the Pokégear's radio card (the Expansion Card from Lavender Radio Tower).
-- Stand in Vermilion City on the tile directly below Snorlax, **facing up** at it, and save. You don't need to turn the radio on before saving; the radio doesn't survive a reload, so the plugin tunes it every attempt.
+- Snorlax is two tiles wide. Stand on the tile directly below its **left half**, **facing up**, and save. The tile below the right half is not accepted.
+- You don't need to turn the radio on before saving. The radio doesn't survive a reload, so the plugin tunes it every attempt.
 - The plugin opens the Start menu, opens the Pokégear, tunes the radio to the Poké Flute channel (20.0), closes the menus, then presses A and advances the wake-up text.
 
 ### Raikou and Entei (BeastFinder)
+
+<img src="docs/images/spot-beasts.png" alt="Player on the Route 38 mat inside the gate to Ecruteak City" width="320">
 
 - Raikou and Entei must already be roaming (released at the Burned Tower).
 - Put a Pokémon between **Lv17 and Lv40** in the first party slot, not fainted. Route 38's wild Pokémon are Lv16 or below and the beasts are Lv40, so with a Repel on, only a beast can appear.
 - Use a **Max Repel** just before saving (a Super Repel also works). The save needs at least 120 Repel steps left, so a plain Repel (100) is not enough. Each attempt reloads the save, so the Repel is back to full every time.
 - Walk from Route 38 into the gate between Route 38 and Ecruteak City. Save on the tile you arrive on, the mat just inside the Route 38 door (one step further in also works). Facing doesn't matter.
 - The plugin steps out onto Route 38 once. If no beast has moved onto the route, it resets and reloads, which scatters the beasts again. When one is on Route 38, it walks to the grass just outside the gate and paces it until the encounter starts.
-- Stay on Route 38 at the encounter. The beasts flee on their first turn, so have a Mean Look or Spider Web user ready, or plan to chase it.
+- Be ready when the battle starts. Raikou and Entei always run on their turn unless they're trapped (Mean Look or Spider Web), asleep or frozen. A Ball thrown on your first turn always goes before they can run; a move only does if your Pokémon is faster.
+
+### If the plugin stops before starting
+
+| Message | Fix |
+|---|---|
+| `Save not below Tin Tower door` | Suicune: save on the tile below the tower's own door, facing up. |
+| `Save not facing legendary` | Ho-Oh, Lugia or Snorlax: save on the tile directly below it (Snorlax's left half), facing up. |
+| `Save not at gate's Route 38 exit` | BeastFinder: save on the Route 38 mat inside the gate, or one step in. |
+| `Use a Max Repel, then save` | BeastFinder: use a Max or Super Repel right before saving. |
+| `Lead must be Lv17-40` | BeastFinder: put a Lv17–40 Pokémon that isn't fainted first in the party. |
+| `No unmet beast is roaming` | BeastFinder: neither beast is roaming in this save. |
+| `Map mismatch; see values` | The save is on the wrong map for this build. |
 
 ## Installation
 
@@ -102,11 +127,19 @@ Pokémon from these builds are auto-hunted. Say so where it matters: r/ShinyPoke
 
 ## How it is built
 
-Each target is a Cargo feature on CelebiHunter's Reset v1.0.0 core. It changes the start map and tile, the target species and level, and the input sequence. The rest of the Reset logic is unchanged: the same human-like input timing, DVs read and confirmed in the battle before deciding, and a reset only after a confirmed miss.
+Every build comes from the same code, CelebiHunter's Reset v1.0.0 core, with a build option (a "Cargo feature") that picks the target: the start map and tile, the target species and level, and the input sequence. The rest of the Reset logic is unchanged: the same human-like input timing, DVs read and confirmed in the battle before deciding, and a reset only after a confirmed miss.
 
 The shared Rust core still contains CelebiHunter's older RNG code. No build in this repository enables it, and the build script rejects any binary that links it. CelebiHunter's separate RNG build is not included here.
 
 To build from source, see [docs/BUILDING.md](docs/BUILDING.md). Each binary used in the hardware hunts above rebuilds byte-for-byte from the commit that added or last changed its target; the hashes are listed there.
+
+## Dry run in an emulator
+
+[`tools/dryrun/`](tools/dryrun/) runs the plugins' own decision code against Pokémon Crystal in an emulator. The game is built from the [pret/pokecrystal](https://github.com/pret/pokecrystal) disassembly and runs in [PyBoy](https://github.com/Baekalfen/PyBoy). The plugin logic is the same Rust that goes into each `.3gx`, compiled for a computer instead of the 3DS.
+
+In testing, Suicune, Ho-Oh, Lugia and Snorlax each ran 301 attempts without a stall: every attempt reached the battle, read the DVs and reset. With shiny DVs written in on purpose (a test hook in the script, not something the plugins do), each one stopped on the shiny. BeastFinder found a beast in 8 out of 8 runs.
+
+This doesn't test the 3DS side: the Virtual Console hook, button injection and console timing. The hardware hunts above cover that.
 
 ## AI disclosure
 
@@ -115,6 +148,7 @@ This project was written with [Claude](https://claude.ai), Anthropic's AI assist
 ## Documentation
 
 - [Building](docs/BUILDING.md)
+- [Dry run in an emulator](tools/dryrun/README.md)
 - [Backup and recovery](docs/SAFETY.md)
 - [Contributing](CONTRIBUTING.md)
 
@@ -126,7 +160,8 @@ GNU GPL v3.0 or later, the same as CelebiHunter. See [LICENSE](LICENSE). This is
 
 - [CelebiHunter](https://github.com/Kou1236/CelebiHunter) by Kou1236: the Reset v1.0.0 engine every build here is based on.
 - [PokeReader](https://github.com/zaksabeast/PokeReader) and [Pokémon RNG Guides](https://github.com/zaksabeast/PokemonRNGGuides) by zaksabeast: game reading and Crystal research that CelebiHunter builds on.
-- [pret/pokecrystal](https://github.com/pret/pokecrystal): Crystal disassembly and symbols.
+- [pret/pokecrystal](https://github.com/pret/pokecrystal): Crystal disassembly and symbols, and the game build used by the dry run.
+- [PyBoy](https://github.com/Baekalfen/PyBoy): the Game Boy emulator used by the dry run.
 - [Pan Docs](https://gbdev.io/pandocs/) by gbdev: Game Boy hardware documentation.
 - [Luma3DS](https://github.com/LumaTeam/Luma3DS) by LumaTeam: the 3GX plugin loader and Rosalina.
 - [CTRPluginFramework](https://gitlab.com/thepixellizeross/ctrpluginframework) by The Pixellizer Group and [Blank Template](https://github.com/PabloMK7/CTRPluginFramework-BlankTemplate) by PabloMK7: plugin interfaces and 3GX build references.
