@@ -46,10 +46,10 @@ The hardware results in the README were produced with specific binaries. Each on
 
 | Build | Commit | SHA-256 |
 |---|---|---|
-| `Suicune.3gx` | `Add Tin Tower Suicune reset variant` | `51979c9a3f9cde91…` |
-| `HoOh.3gx`, `Lugia.3gx` | `Add Ho-Oh and Lugia reset variants` | `a0e2209fb6a80bdc…`, `51767e85a70a3e11…` |
-| `BeastFinder.3gx` | `Beasts: save inside gate, step out once, reload if no beast arrived` | `68d7c76917245bf0…` |
-| `Snorlax.3gx` | `Snorlax: advance the three wake-up text prompts` | `e393bfa1e12e67ac…` |
+| `Suicune.3gx` | `a5eb527` Add Tin Tower Suicune reset variant | `51979c9a3f9cde91…` |
+| `HoOh.3gx`, `Lugia.3gx` | `22a0171` Add Ho-Oh and Lugia reset variants | `a0e2209fb6a80bdc…`, `51767e85a70a3e11…` |
+| `BeastFinder.3gx` | `78a59da` Beasts: save inside gate, step out once, reload if no beast arrived | `68d7c76917245bf0…` |
+| `Snorlax.3gx` | `00c8395` Snorlax: advance the three wake-up text prompts | `e393bfa1e12e67ac…` |
 
 Check out the commit, build that target with the toolchain above, and compare `dist/SHA256SUMS.txt`. Later commits touch shared code, so tip builds of Suicune, Ho-Oh, Lugia and BeastFinder are not the same files as the ones tested. Snorlax was the last target added, and its tip build is still the tested file.
 
