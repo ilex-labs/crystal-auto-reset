@@ -1,84 +1,70 @@
 # Building
 
-RNG v1.4.0 is built from the C/assembly sources in `rng/`. Reset keeps the v1.0.0 Rust core and C/assembly entry layer.
+All builds come from one Rust core (`core/`) plus a small C/assembly entry layer (`3gx/`). Each build is a Cargo feature that picks the target encounter; `tools/build_legacy.py` compiles it, links it, audits the result and packages the `.3gx`.
 
 ## Dependencies
 
 - Python 3.10 or newer
-- devkitARM and libctru
+- devkitARM, plus libctru's `source/svc.s`
 - 3gxtool
+- Rust `nightly-2024-03-21` with the `rust-src` component
 
-Reset retains its original Windows build setup: Rustup, Cargo, Rust nightly `nightly-2024-03-21-x86_64-pc-windows-gnu`, and the target/build-std components for `armv6k-nintendo-3ds`. Building RNG alone does not need Rust.
-
-The build script checks PATH and devkitPro locations. Set `DEVKITPRO` to your devkitPro directory if needed. To use a toolchain stored elsewhere, set:
-
-```text
-CELEBIHUNTER_TOOLCHAIN_ROOT=/path/to/toolchain
-```
-
-For an offline Reset build with a Cargo vendor directory, set:
+On x86_64 Linux, `tools/setup_toolchain_linux.sh` fetches the exact versions used for the released binaries: devkitARM from the `devkitpro/devkitarm` Docker image (layer hashes are checked), libctru's `svc.s`, Rust `nightly-2024-03-21`, and 3gxtool at commit `57e3160ab7`.
 
 ```text
-CELEBIHUNTER_VENDOR_DIR=/path/to/vendor
+tools/setup_toolchain_linux.sh
+source .toolchain/env.sh
 ```
+
+`env.sh` sets `CRYSTAL_RUST_HOST=x86_64-unknown-linux-gnu`. Without it the script uses the Windows toolchain name `nightly-2024-03-21-x86_64-pc-windows-gnu`, as CelebiHunter does.
+
+The script looks for tools on `PATH` and under `.toolchain/`. Set `DEVKITPRO` to your devkitPro directory if needed, or point `CELEBIHUNTER_TOOLCHAIN_ROOT` at a toolchain stored elsewhere. For an offline build with a Cargo vendor directory, set `CELEBIHUNTER_VENDOR_DIR`.
 
 ## Commands
 
-Build both versions:
+Build everything:
 
 ```text
-python tools/build.py
+python3 tools/build_legacy.py
 ```
 
-Build one mode:
+Build one or more targets:
 
 ```text
-python tools/build.py --reset
-python tools/build.py --rng
+python3 tools/build_legacy.py --suicune
+python3 tools/build_legacy.py --hooh --lugia
+python3 tools/build_legacy.py --snorlax --beastfinder
 ```
 
-Outputs are written to `dist/Reset.3gx`, `dist/RNG.3gx`, and `dist/SHA256SUMS.txt`. RNG's build checks its ELF layout and packaged 3GX contents before accepting the output.
+`--reset` builds CelebiHunter's original Celebi target from this tree. It is kept for comparison with upstream; for an actual Celebi hunt, use CelebiHunter's own Reset v1.0.0 release (see the README).
 
-`rng/build_sources.json` lists and hashes the RNG sources and their dependencies. Update the matching hashes when changing those files. `tools/build_legacy.py` preserves the original Reset build; its old RNG path is retained for the v1.0.0 source history.
+Outputs go to `dist/<Name>.3gx`, with checksums in `dist/SHA256SUMS.txt`. Every build is audited before it is accepted: it must carry the reset runtime marker, must not link the RNG resolver or the retired DIV gate, must stay within its stack budgets, and must not contain debug or private strings.
+
+## Reproducing the tested binaries
+
+The hardware results in the README were produced with specific binaries. Each one rebuilds byte-for-byte from the commit that added or last changed its target:
+
+| Build | Commit | SHA-256 |
+|---|---|---|
+| `Suicune.3gx` | `Add Tin Tower Suicune reset variant` | `51979c9a3f9cde91…` |
+| `HoOh.3gx`, `Lugia.3gx` | `Add Ho-Oh and Lugia reset variants` | `a0e2209fb6a80bdc…`, `51767e85a70a3e11…` |
+| `BeastFinder.3gx` | `Beasts: save inside gate, step out once, reload if no beast arrived` | `68d7c76917245bf0…` |
+| `Snorlax.3gx` | `Snorlax: advance the three wake-up text prompts` | `e393bfa1e12e67ac…` |
+
+Check out the commit, build that target with the toolchain above, and compare `dist/SHA256SUMS.txt`. Later commits touch shared code, so tip builds of Suicune, Ho-Oh, Lugia and BeastFinder are not the same files as the ones tested. Snorlax was the last target added, and its tip build is still the tested file.
 
 ## Tests
 
-Run the RNG tests with a host C compiler (`gcc` or `clang`):
+The controller and reset tests are plain Rust and run on the host:
 
 ```text
-python tests/run_rng_tests.py
-```
-
-Use `--cc` or `CC` to choose the compiler. On Windows, Zig is also supported:
-
-```text
-python tests/run_rng_tests.py --zig /path/to/zig.exe
-```
-
-The suite covers candidate search, scalar comparison, player input, long waits, and saved waiting-state fixtures. It mocks device interfaces; hardware reports remain useful for other console and CPU configurations.
-
-Run the unchanged Reset and controller tests with Rust:
-
-```text
-mkdir build
+mkdir -p build
 rustc --test --edition 2021 tests/celebi.rs -O -o build/celebi_tests
 build/celebi_tests
 ```
 
-`tests/celebi_manual.rs` tests the historical v1.0.0 RNG implementation, not RNG v1.4.0. CI runs the new C suite and the Reset tests.
+CI runs the same suite on every push.
 
-## Package a release
-
-After building both versions, run:
-
-```text
-python tools/package_release.py
-```
-
-The release archive and checksums are written to `dist/`. For v1.1.0, use the original v1.0.0 `Reset.3gx` alongside the new RNG file. Its SHA256 is:
-
-```text
-765cacc20faac806857c2744a201b890b76f53248cbd3dc870f6b9af1f1a3724
-```
+## Releases
 
 Do not include a toolchain, ROM, CIA, native code dump, save, or personal capture in a release.

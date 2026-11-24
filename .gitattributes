@@ -1,3 +1,0 @@
-# Keep pinned RNG source and fixture byte hashes identical on every checkout.
-rng/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
-tests/rng/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

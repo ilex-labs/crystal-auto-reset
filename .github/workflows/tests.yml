@@ -9,16 +9,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.x'
-      - name: Run RNG v1.4.0 host tests
-        env:
-          CC: gcc
-        run: python tests/run_rng_tests.py
       - name: Install Rust
         run: rustup toolchain install stable --profile minimal
-      - name: Run Reset and controller tests
+      - name: Run reset and controller tests
         run: |
           mkdir -p build
           rustc +stable --test --edition 2021 tests/celebi.rs -O -o build/celebi_tests

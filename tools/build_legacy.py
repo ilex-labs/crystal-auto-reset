@@ -1,4 +1,4 @@
-"""Build and audit the two public CelebiHunter 3GX releases."""
+"""Build and audit the Crystal Auto Reset 3GX plugins (reset-only builds)."""
 from __future__ import annotations
 
 import hashlib
@@ -24,6 +24,8 @@ def toolchain_roots() -> list[pathlib.Path]:
 
 
 TOOLCHAIN_ROOTS = toolchain_roots()
+# Upstream builds on Windows; set CRYSTAL_RUST_HOST=x86_64-unknown-linux-gnu on Linux.
+RUST_HOST = os.environ.get("CRYSTAL_RUST_HOST", "x86_64-pc-windows-gnu")
 
 
 def find(pattern: str, command: str | None = None) -> pathlib.Path:
@@ -139,7 +141,7 @@ def build_rust(mode: str, mode_build: pathlib.Path) -> pathlib.Path:
         value for value in (env.get("RUSTFLAGS", ""), *remaps) if value
     )
     run([
-        CARGO, "+nightly-2024-03-21-x86_64-pc-windows-gnu", "build",
+        CARGO, f"+nightly-2024-03-21-{RUST_HOST}", "build",
         *cargo_args, "--release", "-Z", "build-std=core,alloc",
         "--target", "armv6k-nintendo-3ds", "--target-dir", target_dir,
         "--manifest-path", ROOT / "core/Cargo.toml", "--features", mode,
@@ -187,9 +189,9 @@ def compile_elf(mode_build: pathlib.Path, rust_lib: pathlib.Path) -> pathlib.Pat
 
 
 def verify_mode(elf: pathlib.Path, mode: str) -> None:
-    if mode in ("suicune", "hooh", "lugia", "beastfinder", "snorlax"):
-        mode = "reset"  # identical release policy and audits
-    expected = 1 if mode == "reset" else 3
+    # Every build here is reset-only and shares the Reset release policy and audits.
+    mode = "reset"
+    expected = 1
     if not re.search(r"\bmov\s+r0,\s*#1\b", symbol_body(elf, "celebi_auto_enabled")):
         raise SystemExit("Automatic runtime marker is disabled")
     if not re.search(rf"\bmov\s+r0,\s*#{expected}\b", symbol_body(elf, "celebi_auto_mode")):
@@ -213,24 +215,13 @@ def verify_mode(elf: pathlib.Path, mode: str) -> None:
     if "celebi_log_write" in table or "celebi_code_audit_capture" in table:
         raise SystemExit(f"Filesystem logger linked into {mode}")
 
-    if mode == "reset":
-        if present := [value for value in ("begin_full_phase_probe", "start_for_dvs") if value in table]:
-            raise SystemExit("Reset links RNG resolver entry points: " + ", ".join(present))
-        if "DivTracker" in table or b"GS text: waiting for DIV" in data:
-            raise SystemExit("Reset links the retired DIV readiness gate")
-    else:
-        if not re.search(r"\bmov\s+r0,\s*#0\b", symbol_body(elf, "celebi_auto_host_buttons")):
-            raise SystemExit("RNG can produce virtual controller input")
-        if "begin_full_phase_probe" not in table:
-            raise SystemExit("RNG is missing the fixed FAAA resolver")
-        for value in (b"SHINY CELEBI FOUND", b"CELEBI AUTO STOPPED", b"Attempts ", b"R: continue"):
-            if value in data:
-                raise SystemExit(f"RNG links a hidden UI string: {value!r}")
+    if present := [value for value in ("begin_full_phase_probe", "start_for_dvs") if value in table]:
+        raise SystemExit("Build links RNG resolver entry points: " + ", ".join(present))
+    if "DivTracker" in table or b"GS text: waiting for DIV" in data:
+        raise SystemExit("Build links the retired DIV readiness gate")
 
     verify_stack(elf, "celebi_auto_service", 8192)
     verify_stack(elf, resolve_symbol(elf, "route_crystal"), 256)
-    if mode == "rng":
-        verify_stack(elf, resolve_symbol(elf, "begin_full_phase_probe"), 2048)
 
 
 def build(mode: str) -> pathlib.Path:
@@ -240,7 +231,7 @@ def build(mode: str) -> pathlib.Path:
     elf = compile_elf(mode_build, rust_lib)
     verify_mode(elf, mode)
 
-    names = {"reset": "Reset", "rng": "RNG", "suicune": "Suicune", "hooh": "HoOh", "lugia": "Lugia", "beastfinder": "BeastFinder", "snorlax": "Snorlax"}
+    names = {"reset": "Reset", "suicune": "Suicune", "hooh": "HoOh", "lugia": "Lugia", "beastfinder": "BeastFinder", "snorlax": "Snorlax"}
     output = DIST / f"{names[mode]}.3gx"
     metadata = ROOT / "3gx" / f"{names[mode]}.plgInfo"
     DIST.mkdir(exist_ok=True)
@@ -256,13 +247,13 @@ def build(mode: str) -> pathlib.Path:
 
 
 def main() -> None:
-    flags = {"--reset", "--rng", "--suicune", "--hooh", "--lugia", "--beastfinder", "--snorlax"}
+    flags = {"--reset", "--suicune", "--hooh", "--lugia", "--beastfinder", "--snorlax"}
     choices = {arg for arg in sys.argv[1:] if arg in flags}
     if any(arg not in flags for arg in sys.argv[1:]):
-        raise SystemExit("Usage: python tools/build_legacy.py [--reset] [--rng] [--suicune] [--hooh] [--lugia] [--beastfinder] [--snorlax]")
+        raise SystemExit("Usage: python tools/build_legacy.py [--reset] [--suicune] [--hooh] [--lugia] [--beastfinder] [--snorlax]")
     modes = [
         value
-        for flag, value in (("--reset", "reset"), ("--rng", "rng"), ("--suicune", "suicune"), ("--hooh", "hooh"), ("--lugia", "lugia"), ("--beastfinder", "beastfinder"), ("--snorlax", "snorlax"))
+        for flag, value in (("--reset", "reset"), ("--suicune", "suicune"), ("--hooh", "hooh"), ("--lugia", "lugia"), ("--beastfinder", "beastfinder"), ("--snorlax", "snorlax"))
         if not choices or flag in choices
     ]
     outputs = [build(mode) for mode in modes]

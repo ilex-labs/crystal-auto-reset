@@ -1,28 +1,19 @@
 # Releasing
 
-## Hardware check
+## Which binaries
 
-Test the release build, or verify that its loaded code matches the tested build with only the HUD version changed.
+Release the exact binaries that were tested on hardware. Each one rebuilds byte-for-byte from the commit listed in [docs/BUILDING.md](../docs/BUILDING.md#reproducing-the-tested-binaries); check its SHA-256 against that table before uploading.
 
-- Keep the original v1.0.0 `Reset.3gx` for releases without Reset changes. If rebuilding Reset, test one non-shiny cycle and confirm `B` stops it.
-- RNG: check manual pause, L steps, resume, Target refresh, and the final encounter's DVs against the forecast.
-- Use Restart in the VC touch-screen menu and confirm RNG recovers without R04/R08.
-- Run the host tests and wait for GitHub Actions to pass before publishing.
+A target is only released after a real hunt on hardware. If a later change to shared code is meant to ship, test the new build on a console first (at least one non-shiny cycle, a stop with `B`, and the target's own steps), then record its commit and hash.
 
-## Package
+## Checks
 
-```text
-python tools/build.py --rng
-python tools/package_release.py
-```
+- Run the host tests and wait for GitHub Actions to pass.
+- Every build must pass the audits in `tools/build_legacy.py`.
 
 ## GitHub release
 
-1. Create the matching version tag and release title, currently `v1.4.0`.
-2. Use that version's section of `CHANGELOG.md` as the release notes.
-3. Upload:
-   - `Reset.3gx`
-   - `RNG.3gx`
-   - `SHA256SUMS.txt`
-   - `CelebiHunter-v1.4.0.zip`
-4. Verify each uploaded asset's SHA-256 against the local package. Leave an unverified build as a draft.
+1. Tag the release and use the tag as the release title.
+2. Upload each `.3gx` and a `SHA256SUMS.txt` that covers them.
+3. In the notes, list each file with the commit it was built from and its hardware result.
+4. Verify each uploaded asset's SHA-256 against the local file. Leave an unverified build as a draft.
