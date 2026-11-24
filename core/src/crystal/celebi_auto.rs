@@ -1,12 +1,16 @@
 //! Automatic controller. Only observed screens authorize forward transitions.
 //! Buttons are transient controller inputs, never writes to saves, RNG, or Pokemon data.
 use super::celebi_session::{
-    supported_cpu_mhz, Command, Observation, Phase, Session, START_MAP, TARGET_SPECIES,
+    is_target_species, supported_cpu_mhz, Command, Observation, Phase, Session, START_MAP,
 };
+#[cfg(feature = "beasts")]
+use super::celebi_session::{GATE_MAP, TARGET_LEVEL};
 #[cfg(feature = "suicune")]
 use super::celebi_session::ENCOUNTER_MAP;
 
 /// hJoypadDown layout: A/B/Select/Start in the low nibble, Right/Left/Up/Down high.
+pub const PAD_RIGHT: u8 = 0x10;
+pub const PAD_LEFT: u8 = 0x20;
 pub const PAD_UP: u8 = 0x40;
 
 pub const fn suicune_mode() -> bool {
@@ -18,9 +22,14 @@ pub const fn static_mode() -> bool {
     cfg!(any(feature = "hooh", feature = "lugia"))
 }
 
+/// Raikou / Entei roaming hunt on Route 38.
+pub const fn beasts_mode() -> bool {
+    cfg!(feature = "beasts")
+}
+
 /// Any target whose save starts on the overworld (no GS Ball dialog).
 pub const fn overworld_mode() -> bool {
-    suicune_mode() || static_mode()
+    suicune_mode() || static_mode() || beasts_mode()
 }
 
 #[cfg(all(feature = "celebi_natural", feature = "celebi_resolver"))]
@@ -67,6 +76,11 @@ pub enum Stage {
     NaturalA,
     // Suicune only: hold Up into the Tin Tower door until Tin Tower 1F loads.
     Walk,
+    // Beasts only: cross the Route 38 gate door until a beast is on Route 38,
+    // walk to the grass, then pace inside it until the encounter starts.
+    Cross,
+    ToGrass,
+    Grass,
     Search,
     DirectA,
     Advance,
@@ -106,6 +120,11 @@ pub struct Screen {
     pub physical_a: bool,
     pub physical_x: bool,
     pub physical_y: bool,
+    // Beasts mode: Repel steps, party lead, roam structs (species, map, HP).
+    pub repel: u8,
+    pub lead_level: u8,
+    pub lead_alive: bool,
+    pub roam: [(u8, (u8, u8), u8); 2],
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Motion {
@@ -168,6 +187,10 @@ pub struct Bot {
     physical_a_ready: bool,
     select_key_latch: u8,
     run_entropy: u64,
+    pub crossings: u16,
+    pub aborts: u32,
+    pub found_species: u8,
+    last_map: (u8, u8),
 }
 impl Bot {
     pub const fn new() -> Self {
@@ -198,6 +221,10 @@ impl Bot {
             last_frame: 0,
             reanchors: 0,
             physical_a_ready: false,
+            crossings: 0,
+            aborts: 0,
+            found_species: 0,
+            last_map: (0, 0),
             select_key_latch: 0,
             run_entropy: 0,
         }
@@ -386,6 +413,8 @@ impl Bot {
             // increments appears.  The previous 7200-poll guard could stop a
             // healthy run before that witness arrived.
             Stage::Track => 20000,
+            Stage::Cross => 40000,
+            Stage::Grass => 20000,
             _ => 7200,
         };
         if self.polls > poll_limit {
@@ -483,6 +512,16 @@ impl Bot {
                 motion: Motion::Run,
                 buttons: 1,
             };
+        }
+        if self.stage == Stage::NaturalA && beasts_mode() {
+            if !s.world || !s.shrine || obs.map != START_MAP || obs.battle != 0 {
+                return self.stop("Left gate door before start");
+            }
+            self.enter(Stage::Cross, "Crossing gate: finding beast");
+            self.crossings = 0;
+            self.last_map = obs.map;
+            self.held = PAD_RIGHT;
+            return Output { motion: Motion::Run, buttons: PAD_RIGHT };
         }
         if self.stage == Stage::NaturalA && suicune_mode() {
             if !s.world || !s.shrine || obs.map != START_MAP {
@@ -642,11 +681,18 @@ impl Bot {
                     if !s.shrine || obs.map != START_MAP {
                         return self.stop(if suicune_mode() {
                             "Save not below Tin Tower door"
+                        } else if beasts_mode() {
+                            "Save not on Route 38 gate door"
                         } else if static_mode() {
                             "Save not facing legendary"
                         } else {
                             "Save not at shrine start"
                         });
+                    }
+                    if beasts_mode() {
+                        if let Some(problem) = beast_setup_error(s) {
+                            return self.stop(problem);
+                        }
                     }
                     if overworld_mode() {
                         // No dialog precedes the input. Wait the disclosed
@@ -769,6 +815,18 @@ impl Bot {
                     return self.stop("Walk stage is Suicune-only");
                 }
             }
+            Stage::Cross | Stage::ToGrass | Stage::Grass => {
+                #[cfg(feature = "beasts")]
+                {
+                    if let Some(out) = self.beast_walk(obs, s) {
+                        return out;
+                    }
+                }
+                #[cfg(not(feature = "beasts"))]
+                {
+                    return self.stop("Beast stages are beasts-only");
+                }
+            }
             Stage::Search => {
                 self.held = 0;
                 motion = Motion::Pause;
@@ -852,12 +910,13 @@ impl Bot {
                         return self.stop("Shiny differs from selected candidate");
                     }
                     self.stage = Stage::Shiny;
+                    self.found_species = obs.species;
                     self.message = "SHINY: stopped, keep game";
                     self.held = 0;
                     motion = Motion::Pause;
                 } else if self.session.phase == Phase::Miss {
                     // Recheck fresh current data before discarding this encounter.
-                    if self.session.result != Some(obs.dvs) || obs.battle != 1 || obs.species != TARGET_SPECIES {
+                    if self.session.result != Some(obs.dvs) || obs.battle != 1 || !is_target_species(obs.species) {
                         return self.stop("Result changed; no reset");
                     }
                     if super::celebi_rng::shiny(obs.dvs[0], obs.dvs[1]) {
@@ -920,6 +979,134 @@ impl Bot {
     }
 }
 
+/// Route 38 grass is Lv2-16; beasts are Lv40. With a Repel active, only a
+/// lead between 17 and 40 lets the beasts (and nothing else) through.
+pub fn beast_setup_error(s: Screen) -> Option<&'static str> {
+    let mut present = 0;
+    for (species, _map, hp) in s.roam {
+        if species == 243 || species == 244 {
+            present += 1;
+            if hp != 0 {
+                return Some("Beast already met: DVs fixed");
+            }
+        }
+    }
+    if present == 0 {
+        Some("No unmet beast is roaming")
+    } else if s.repel < 120 {
+        Some("Use a Max Repel, then save")
+    } else if !s.lead_alive || s.lead_level < 17 || s.lead_level > 40 {
+        Some("Lead must be Lv17-40")
+    } else {
+        None
+    }
+}
+
+pub fn beast_on_map(s: Screen, map: (u8, u8)) -> bool {
+    s.roam
+        .iter()
+        .any(|(species, at, _)| (*species == 243 || *species == 244) && *at == map)
+}
+
+#[cfg(feature = "beasts")]
+impl Bot {
+    fn abort_attempt(&mut self, why: &'static str) -> Output {
+        // Nothing was saved and no beast was met: the in-game save still has
+        // both beasts unmet. Reuse the verified soft-reset path.
+        self.held = 0;
+        self.aborts += 1;
+        self.enter(Stage::SaveResult, why);
+        Output { motion: Motion::Pause, buttons: 0 }
+    }
+
+    /// Returns Some(output) to end this tick early; None continues to the
+    /// common tail (which sends `self.held`).
+    fn beast_walk(&mut self, obs: Observation, s: Screen) -> Option<Output> {
+        if obs.battle != 0 {
+            if self.stage != Stage::Grass {
+                return Some(self.stop("Battle outside grass path"));
+            }
+            self.held = 0;
+            self.attempts += 1;
+            self.enter(Stage::Battle, "Encounter: game chooses DVs");
+            return None;
+        }
+        if !s.world {
+            // Warp/fade in progress: keep the current direction.
+            return None;
+        }
+        let map = obs.map;
+        match self.stage {
+            Stage::Cross => {
+                if map == GATE_MAP {
+                    self.last_map = map;
+                    self.held = PAD_LEFT;
+                } else if map == START_MAP {
+                    // A held Left can carry one or two steps past the door
+                    // after the warp; stay on row 8 between the door and x=30.
+                    if s.y != START_XY_PUB.1 || s.x < 30 || s.x > START_XY_PUB.0 {
+                        return Some(self.stop("Off the gate door row"));
+                    }
+                    if self.last_map == GATE_MAP {
+                        self.last_map = map;
+                        self.crossings += 1;
+                    }
+                    if beast_on_map(s, START_MAP) {
+                        if s.wram_bank & 7 > 1 {
+                            return None;
+                        }
+                        if !self.session.trigger_unmodified_now(obs) {
+                            return Some(self.stop(self.session.message));
+                        }
+                        self.held = 0;
+                        self.enter(Stage::ToGrass, "Beast on Route 38: to grass");
+                    } else if self.crossings > 150 {
+                        return Some(self.abort_attempt("No beast nearby: reset"));
+                    } else {
+                        self.held = PAD_RIGHT;
+                    }
+                } else {
+                    return Some(self.stop("Unexpected map while crossing"));
+                }
+            }
+            Stage::ToGrass => {
+                if map != START_MAP {
+                    return Some(self.stop("Left Route 38 on grass path"));
+                }
+                if s.y >= 8 {
+                    self.held = if s.x > 30 { PAD_LEFT } else { PAD_UP };
+                } else if s.y == 7 && s.x == 30 {
+                    self.held = PAD_LEFT;
+                    self.enter(Stage::Grass, "Pacing grass (Repel on)");
+                } else {
+                    return Some(self.stop("Off grass path"));
+                }
+            }
+            Stage::Grass => {
+                if map != START_MAP || s.y != 7 || s.x < 25 || s.x > 30 {
+                    return Some(self.stop("Off grass path"));
+                }
+                if s.repel <= 3 {
+                    return Some(self.abort_attempt("Repel low: reset"));
+                }
+                if s.x <= 26 {
+                    self.held = PAD_RIGHT;
+                } else if s.x >= 29 {
+                    self.held = PAD_LEFT;
+                } else if self.held == 0 {
+                    self.held = PAD_LEFT;
+                }
+            }
+            _ => {}
+        }
+        let _ = TARGET_LEVEL;
+        None
+    }
+}
+
+#[cfg(feature = "beasts")]
+const START_XY_PUB: (u8, u8) = super::celebi_session::START_XY;
+
 pub fn joyp_with_buttons(raw: u8, buttons: u8) -> u8 {
     // GB JOYP bit 5 low selects A/B/Select/Start, bit 4 low selects the
     // d-pad (Right/Left/Up/Down). Both are active-low. `buttons` uses the
@@ -943,6 +1130,9 @@ pub fn joyp_buttons_for_stage(stage: Stage, buttons: u8) -> u8 {
         | Stage::Load
         | Stage::Shrine
         | Stage::Walk
+        | Stage::Cross
+        | Stage::ToGrass
+        | Stage::Grass
         | Stage::Battle
         | Stage::Reset => buttons,
         _ => 0,
@@ -955,7 +1145,15 @@ pub fn host_buttons_for_stage(stage: Stage, buttons: u8) -> u8 {
     // Battle A stays JOYP-only; the two earlier HID experiments were not
     // consumed by Crystal VC.
     match stage {
-        Stage::Title | Stage::Continue | Stage::Load | Stage::Shrine | Stage::Walk | Stage::Reset => buttons,
+        Stage::Title
+        | Stage::Continue
+        | Stage::Load
+        | Stage::Shrine
+        | Stage::Walk
+        | Stage::Cross
+        | Stage::ToGrass
+        | Stage::Grass
+        | Stage::Reset => buttons,
         _ => 0,
     }
 }

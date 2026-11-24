@@ -25,6 +25,7 @@ reset = ["celebi_natural"]
 suicune = ["celebi_natural"]
 hooh = ["celebi_natural"]
 lugia = ["celebi_natural"]
+beasts = ["celebi_natural"]
 rng = ["celebi_resolver_manual"]
 
 [lib]

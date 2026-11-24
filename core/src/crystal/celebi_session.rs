@@ -13,7 +13,7 @@ pub const EXPECTED_CPU_MHZ: u32 = 268;
 // Ho-Oh: Tin Tower roof (15:12); Lugia: Whirl Islands chamber (3:73). Both
 //   stand at (9,5); the player talks from (9,6) facing up. The script prints
 //   one cry text with no waitbutton and starts a Lv60 battle: one A press.
-#[cfg(not(any(feature = "suicune", feature = "hooh", feature = "lugia")))]
+#[cfg(not(any(feature = "suicune", feature = "hooh", feature = "lugia", feature = "beasts")))]
 mod target {
     pub const START_MAP: (u8, u8) = (3, 52);
     pub const START_XY: (u8, u8) = (8, 23);
@@ -46,7 +46,29 @@ mod target {
     pub const TARGET_LEVEL: u8 = 60;
     pub const TARGET_NAME: &str = "LUGIA";
 }
+// Raikou / Entei (roaming, Lv40). Approach adapted from gsclua's
+// gsc_wild_legendary_beasts.lua (Route 38 grass next to Ecruteak), without
+// emulator savestates: the plugin reloads the in-game save, then crosses the
+// Route 38 / gate door until a beast is on Route 38 (roam struct in RAM), then
+// walks the grass. DVs are rolled by the game at the first encounter.
+#[cfg(feature = "beasts")]
+mod target {
+    pub const START_MAP: (u8, u8) = (1, 12); // Route 38
+    pub const GATE_MAP: (u8, u8) = (1, 9); // Route 38 Ecruteak gate
+    pub const START_XY: (u8, u8) = (35, 8); // door tile into the gate
+    pub const TARGET_SPECIES: u8 = 243;
+    pub const TARGET_LEVEL: u8 = 40;
+    pub const TARGET_NAME: &str = "BEAST";
+}
 pub use target::*;
+
+pub const fn is_target_species(species: u8) -> bool {
+    if cfg!(feature = "beasts") {
+        species == 243 || species == 244
+    } else {
+        species == TARGET_SPECIES
+    }
+}
 
 pub const fn supported_cpu_mhz(cpu_mhz: u32) -> bool {
     cpu_mhz == 268 || cpu_mhz == 804
@@ -109,7 +131,7 @@ impl Observation {
     }
     fn encounter_ready(&self) -> bool {
         self.battle == 1
-            && self.species == TARGET_SPECIES
+            && is_target_species(self.species)
             && self.level == TARGET_LEVEL
             && self.hp > 0
             && self.hp <= self.max_hp

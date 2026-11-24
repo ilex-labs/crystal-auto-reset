@@ -142,9 +142,10 @@ fn screen(stage: Stage) -> Screen {
         save_info: unsafe { TEXT_SAVE_INFO },
         world,
         // Start tile, facing up, no script running (wScriptMode == 0).
+        // Beasts: any facing on the Route 38 door tile.
         shrine: gb_mem::read_u8(0xdcb8) == super::celebi_session::START_XY.0
             && gb_mem::read_u8(0xdcb7) == super::celebi_session::START_XY.1
-            && gb_mem::read_u8(0xd4de) & 12 == 4
+            && (super::celebi_auto::beasts_mode() || gb_mem::read_u8(0xd4de) & 12 == 4)
             && gb_mem::read_u8(0xd437) == 0,
         dialog: bank == 0x1b && (0x6e39..=0x6e42).contains(&pos),
         gs_position,
@@ -152,6 +153,21 @@ fn screen(stage: Stage) -> Screen {
         physical_a: false,
         physical_x: false,
         physical_y: false,
+        repel: gb_mem::read_u8(0xdca1),
+        lead_level: gb_mem::read_u8(0xdcfe),
+        lead_alive: gb_mem::read_u8(0xdd01) != 0 || gb_mem::read_u8(0xdd02) != 0,
+        roam: [
+            (
+                gb_mem::read_u8(0xdfcf),
+                (gb_mem::read_u8(0xdfd1), gb_mem::read_u8(0xdfd2)),
+                gb_mem::read_u8(0xdfd3),
+            ),
+            (
+                gb_mem::read_u8(0xdfd6),
+                (gb_mem::read_u8(0xdfd8), gb_mem::read_u8(0xdfd9)),
+                gb_mem::read_u8(0xdfda),
+            ),
+        ],
     }
 }
 
@@ -424,7 +440,12 @@ pub extern "C" fn celebi_auto_draw() {
     // Public release screens are deliberately small. Development diagnostics
     // are a separate opt-in build and never appear in the release binaries.
     if bot.stage == Stage::Shiny {
-        pnp::println!("SHINY {} FOUND!", super::celebi_session::TARGET_NAME);
+        let name = match bot.found_species {
+            243 => "RAIKOU",
+            244 => "ENTEI",
+            _ => super::celebi_session::TARGET_NAME,
+        };
+        pnp::println!("SHINY {} FOUND!", name);
         if let Some(dvs) = bot.session.result {
             pnp::println!("DVs {:02X} {:02X}", dvs[0], dvs[1]);
         }
