@@ -27,6 +27,7 @@ hooh = ["celebi_natural"]
 lugia = ["celebi_natural"]
 beasts = ["celebi_natural"]
 beastfinder = ["beasts"]
+snorlax = ["celebi_natural"]
 rng = ["celebi_resolver_manual"]
 
 [lib]

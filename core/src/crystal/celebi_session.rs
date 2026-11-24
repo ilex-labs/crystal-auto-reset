@@ -13,7 +13,13 @@ pub const EXPECTED_CPU_MHZ: u32 = 268;
 // Ho-Oh: Tin Tower roof (15:12); Lugia: Whirl Islands chamber (3:73). Both
 //   stand at (9,5); the player talks from (9,6) facing up. The script prints
 //   one cry text with no waitbutton and starts a Lv60 battle: one A press.
-#[cfg(not(any(feature = "suicune", feature = "hooh", feature = "lugia", feature = "beasts")))]
+#[cfg(not(any(
+    feature = "suicune",
+    feature = "hooh",
+    feature = "lugia",
+    feature = "beasts",
+    feature = "snorlax"
+)))]
 mod target {
     pub const START_MAP: (u8, u8) = (3, 52);
     pub const START_XY: (u8, u8) = (8, 23);
@@ -62,6 +68,20 @@ mod target {
     pub const TARGET_SPECIES: u8 = 243;
     pub const TARGET_LEVEL: u8 = 40;
     pub const TARGET_NAME: &str = "BEAST";
+}
+// Snorlax: Vermilion City, sprite at (34,8). VermilionSnorlax only wakes it
+// if wMapMusic is the Poke Flute channel and the player stands next to it
+// (SnorlaxAwake). The radio is not kept across a reload, so each attempt
+// tunes the Pokegear radio to 20.0 (knob 78) first; closing the Pokegear
+// leaves the station playing. Then one A press: cry text without
+// waitbutton, Lv50 battle.
+#[cfg(feature = "snorlax")]
+mod target {
+    pub const START_MAP: (u8, u8) = (12, 3); // Vermilion City
+    pub const START_XY: (u8, u8) = (34, 10); // below Snorlax, facing up
+    pub const TARGET_SPECIES: u8 = 143;
+    pub const TARGET_LEVEL: u8 = 50;
+    pub const TARGET_NAME: &str = "SNORLAX";
 }
 pub use target::*;
 

@@ -175,6 +175,11 @@ fn screen(stage: Stage) -> Screen {
                 gb_mem::read_u8(0xdfda),
             ),
         ],
+        map_music: gb_mem::read_u8(0xc2c0),
+        menu_y: gb_mem::read_u8(0xcfa9),
+        pokegear_card: gb_mem::read_u8(0xcf64),
+        tuning_knob: gb_mem::read_u8(0xd958),
+        script_mode: gb_mem::read_u8(0xd437),
     }
 }
 

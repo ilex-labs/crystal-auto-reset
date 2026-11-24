@@ -17,10 +17,22 @@ pub const fn suicune_mode() -> bool {
     cfg!(feature = "suicune")
 }
 
-/// Ho-Oh / Lugia: talk to a static overworld sprite with one A press.
+/// Ho-Oh / Lugia / Snorlax: talk to a static overworld sprite with one A press.
 pub const fn static_mode() -> bool {
-    cfg!(any(feature = "hooh", feature = "lugia"))
+    cfg!(any(feature = "hooh", feature = "lugia", feature = "snorlax"))
 }
+
+/// Snorlax: tune the Pokegear radio to the Poke Flute channel first.
+pub const fn snorlax_mode() -> bool {
+    cfg!(feature = "snorlax")
+}
+
+pub const MUSIC_POKE_FLUTE_CHANNEL: u8 = 0x28;
+pub const POKE_FLUTE_KNOB: u8 = 78;
+const PAD_A: u8 = 0x01;
+const PAD_B: u8 = 0x02;
+const PAD_START: u8 = 0x08;
+const PAD_DOWN: u8 = 0x80;
 
 /// Raikou / Entei roaming hunt on Route 38.
 pub const fn beasts_mode() -> bool {
@@ -98,6 +110,8 @@ pub enum Stage {
     Cross,
     ToGrass,
     Grass,
+    // Snorlax only: Start > Pokegear > Radio 20.0 > B > B.
+    Radio,
     Search,
     DirectA,
     Advance,
@@ -142,6 +156,12 @@ pub struct Screen {
     pub lead_level: u8,
     pub lead_alive: bool,
     pub roam: [(u8, (u8, u8), u8); 2],
+    // Snorlax mode: music and menu state.
+    pub map_music: u8,
+    pub menu_y: u8,
+    pub pokegear_card: u8,
+    pub tuning_knob: u8,
+    pub script_mode: u8,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Motion {
@@ -208,6 +228,11 @@ pub struct Bot {
     pub aborts: u32,
     pub found_species: u8,
     last_map: (u8, u8),
+    radio_step: u8,
+    radio_hold: u8,
+    radio_wait: u16,
+    radio_tries: u16,
+    radio_fail_streak: u8,
 }
 impl Bot {
     pub const fn new() -> Self {
@@ -242,6 +267,11 @@ impl Bot {
             aborts: 0,
             found_species: 0,
             last_map: (0, 0),
+            radio_step: 0,
+            radio_hold: 0,
+            radio_wait: 0,
+            radio_tries: 0,
+            radio_fail_streak: 0,
             select_key_latch: 0,
             run_entropy: 0,
         }
@@ -563,6 +593,9 @@ impl Bot {
                 if !s.world || !s.shrine || obs.map != START_MAP || obs.battle != 0 {
                     return self.stop("Left start tile before A");
                 }
+                if snorlax_mode() && s.map_music != MUSIC_POKE_FLUTE_CHANNEL {
+                    return self.stop("Poke Flute channel stopped");
+                }
             } else if !s.gs_position {
                 return self.stop("GS text lost before natural A");
             }
@@ -711,6 +744,14 @@ impl Bot {
                             return self.stop(problem);
                         }
                     }
+                    if snorlax_mode() {
+                        self.radio_step = 0;
+                        self.radio_wait = 30;
+                        self.radio_tries = 0;
+                        self.held = 0;
+                        self.enter(Stage::Radio, "Tuning radio: Poke Flute");
+                        return Output { motion: Motion::Run, buttons: 0 };
+                    }
                     if overworld_mode() {
                         // No dialog precedes the input. Wait the disclosed
                         // human-like response time, then press Up / A once.
@@ -793,6 +834,9 @@ impl Bot {
                     if !s.world || !s.shrine || obs.map != save_map() || obs.battle != 0 {
                         return self.stop("Moved off start tile");
                     }
+                    if snorlax_mode() && s.map_music != MUSIC_POKE_FLUTE_CHANNEL {
+                        return self.stop("Poke Flute channel stopped");
+                    }
                 } else if !s.gs_position {
                     return self.stop("GS text lost during natural delay");
                 }
@@ -830,6 +874,11 @@ impl Bot {
                 #[cfg(not(feature = "suicune"))]
                 {
                     return self.stop("Walk stage is Suicune-only");
+                }
+            }
+            Stage::Radio => {
+                if let Some(out) = self.radio_tick(obs, s) {
+                    return out;
                 }
             }
             Stage::Cross | Stage::ToGrass | Stage::Grass => {
@@ -1024,6 +1073,115 @@ pub fn beast_setup_error(s: Screen) -> Option<&'static str> {
     }
 }
 
+impl Bot {
+    /// Pulse one button: held for 4 ticks, then released for `gap` ticks.
+    fn radio_pulse(&mut self, button: u8, gap: u16) {
+        self.held = button;
+        self.radio_hold = 4;
+        self.radio_wait = gap;
+    }
+
+    /// Menu macro for Snorlax with RAM checks at each step. Any step that does
+    /// not reach its expected state within its budget resets the attempt;
+    /// nothing has been met or saved at that point.
+    fn radio_tick(&mut self, obs: Observation, s: Screen) -> Option<Output> {
+        if obs.battle != 0 {
+            return Some(self.stop("Battle while tuning radio"));
+        }
+        if self.radio_hold > 0 {
+            self.radio_hold -= 1;
+            if self.radio_hold == 0 {
+                self.held = 0;
+            }
+            return None;
+        }
+        if self.radio_wait > 0 {
+            self.radio_wait -= 1;
+            return None;
+        }
+        self.held = 0;
+        self.radio_tries += 1;
+        if self.radio_tries > 400 {
+            return Some(self.abort_radio("Radio menu stuck: reset"));
+        }
+        match self.radio_step {
+            // Open the start menu.
+            0 => {
+                self.radio_pulse(PAD_START, 36);
+                self.radio_step = 1;
+            }
+            // Move the cursor to POKEGEAR (row 4: Dex, Pokemon, Pack, Gear).
+            1 => {
+                if s.menu_y == 4 {
+                    self.radio_pulse(PAD_A, 90);
+                    self.radio_step = 2;
+                } else if (1..=8).contains(&s.menu_y) {
+                    self.radio_pulse(if s.menu_y < 4 { PAD_DOWN } else { PAD_UP }, 8);
+                } else {
+                    return Some(self.abort_radio("Start menu not open: reset"));
+                }
+            }
+            // Pokegear opens on the clock card; Right until the radio card (3).
+            2 => {
+                if s.pokegear_card == 3 {
+                    self.radio_wait = 30;
+                    self.radio_step = 3;
+                } else if s.pokegear_card < 3 {
+                    self.radio_pulse(PAD_RIGHT, 20);
+                } else {
+                    return Some(self.abort_radio("Pokegear not open: reset"));
+                }
+            }
+            // Tune to 20.0 and wait for the Poke Flute music.
+            3 => {
+                if s.tuning_knob < POKE_FLUTE_KNOB {
+                    self.radio_pulse(PAD_UP, 6);
+                } else if s.tuning_knob > POKE_FLUTE_KNOB {
+                    self.radio_pulse(PAD_DOWN, 6);
+                } else if s.map_music == MUSIC_POKE_FLUTE_CHANNEL {
+                    self.radio_pulse(PAD_B, 60);
+                    self.radio_step = 4;
+                }
+            }
+            // Pokegear closed: close the start menu.
+            4 => {
+                self.radio_pulse(PAD_B, 40);
+                self.radio_step = 5;
+            }
+            // Back in the overworld with the flute playing.
+            _ => {
+                if s.world
+                    && s.shrine
+                    && s.script_mode == 0
+                    && obs.map == START_MAP
+                    && s.map_music == MUSIC_POKE_FLUTE_CHANNEL
+                {
+                    self.held = 0;
+                    self.radio_fail_streak = 0;
+                    self.prepare_natural_delay();
+                    self.enter(Stage::NaturalDelay, "Flute on: original RNG");
+                } else if self.radio_tries > 380 {
+                    return Some(self.abort_radio("Flute not playing: reset"));
+                }
+                self.radio_wait = 10;
+            }
+        }
+        None
+    }
+
+    fn abort_radio(&mut self, why: &'static str) -> Output {
+        self.held = 0;
+        self.radio_fail_streak += 1;
+        if self.radio_fail_streak >= 3 {
+            // Same failure three loads in a row: stop rather than loop.
+            return self.stop(why);
+        }
+        self.aborts += 1;
+        self.enter(Stage::SaveResult, why);
+        Output { motion: Motion::Pause, buttons: 0 }
+    }
+}
+
 pub fn beast_on_map(s: Screen, map: (u8, u8)) -> bool {
     s.roam
         .iter()
@@ -1151,6 +1309,7 @@ pub fn joyp_buttons_for_stage(stage: Stage, buttons: u8) -> u8 {
         | Stage::Cross
         | Stage::ToGrass
         | Stage::Grass
+        | Stage::Radio
         | Stage::Battle
         | Stage::Reset => buttons,
         _ => 0,
@@ -1171,6 +1330,7 @@ pub fn host_buttons_for_stage(stage: Stage, buttons: u8) -> u8 {
         | Stage::Cross
         | Stage::ToGrass
         | Stage::Grass
+        | Stage::Radio
         | Stage::Reset => buttons,
         _ => 0,
     }
