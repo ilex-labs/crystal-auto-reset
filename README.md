@@ -58,7 +58,6 @@ Every attempt reloads your in-game save, so the save decides where the plugin st
 <img src="docs/images/spot-lugia.png" alt="Player surfing directly below Lugia, facing up" width="320">
 
 - Lugia sits in the water, so **Surf** up to the tile directly below it, **facing up** at it, and save while still surfing.
-- The picture was taken with Flash used. Without Flash the chamber is dark, which makes no difference to the plugin.
 - The plugin presses A once.
 
 ### Snorlax
