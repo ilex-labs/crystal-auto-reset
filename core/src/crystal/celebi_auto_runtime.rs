@@ -453,6 +453,15 @@ pub extern "C" fn celebi_auto_draw() {
         pnp::println!("R: continue + hide");
         return;
     }
+    if bot.stage == Stage::Stopped && bot.found_species != 0 {
+        let name = if bot.found_species == 243 { "RAIKOU" } else { "ENTEI" };
+        pnp::println!("{} FOUND (not shiny)", name);
+        if let Some(dvs) = bot.session.result {
+            pnp::println!("DVs {:02X} {:02X}", dvs[0], dvs[1]);
+        }
+        pnp::println!("R: continue + hide, then catch");
+        return;
+    }
     if bot.stage == Stage::Stopped {
         pnp::println!("{} AUTO STOPPED", super::celebi_session::TARGET_NAME);
         pnp::println!("{}", bot.message);

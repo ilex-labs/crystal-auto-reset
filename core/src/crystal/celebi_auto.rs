@@ -27,6 +27,11 @@ pub const fn beasts_mode() -> bool {
     cfg!(feature = "beasts")
 }
 
+/// Beast finder: same walking, but stop on any beast encounter (no DV reset).
+pub const fn finder_mode() -> bool {
+    cfg!(feature = "beastfinder")
+}
+
 /// Any target whose save starts on the overworld (no GS Ball dialog).
 pub const fn overworld_mode() -> bool {
     suicune_mode() || static_mode() || beasts_mode()
@@ -928,6 +933,11 @@ impl Bot {
                         .map(|c| c.outcomes().contains(&obs.dvs))
                         .unwrap_or(false);
                     self.last_miss = self.session.result;
+                    if finder_mode() {
+                        // Hand the encounter to the player; never reset it.
+                        self.found_species = obs.species;
+                        return self.stop("Beast found: your turn");
+                    }
                     if self.calibration {
                         return self.stop("CAL sample ready; no reset");
                     }
@@ -986,7 +996,7 @@ pub fn beast_setup_error(s: Screen) -> Option<&'static str> {
     for (species, _map, hp) in s.roam {
         if species == 243 || species == 244 {
             present += 1;
-            if hp != 0 {
+            if hp != 0 && !finder_mode() {
                 return Some("Beast already met: DVs fixed");
             }
         }
