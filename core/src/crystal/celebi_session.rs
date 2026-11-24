@@ -46,11 +46,14 @@ mod target {
     pub const TARGET_LEVEL: u8 = 60;
     pub const TARGET_NAME: &str = "LUGIA";
 }
-// Raikou / Entei (roaming, Lv40). Approach adapted from gsclua's
-// gsc_wild_legendary_beasts.lua (Route 38 grass next to Ecruteak), without
-// emulator savestates: the plugin reloads the in-game save, then crosses the
-// Route 38 / gate door until a beast is on Route 38 (roam struct in RAM), then
-// walks the grass. DVs are rolled by the game at the first encounter.
+// Raikou / Entei (roaming, Lv40). Spot from gsclua's
+// gsc_wild_legendary_beasts.lua (Route 38 grass next to Ecruteak); console
+// method: save inside the gate at its Route 38 exit. Continue scatters each
+// beast over the 16 roaming routes and records the gate as the last map, so
+// the single step onto Route 38 lets a beast on Route 37/39/42 move in
+// (UpdateRoamMons never moves a beast onto the map you just left, which is
+// why plain in/out door crossing can never bring one to Route 38). If none
+// arrives, soft reset and reload. DVs are rolled at the first encounter.
 #[cfg(feature = "beasts")]
 mod target {
     pub const START_MAP: (u8, u8) = (1, 12); // Route 38

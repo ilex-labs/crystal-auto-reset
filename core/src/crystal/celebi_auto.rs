@@ -27,6 +27,18 @@ pub const fn beasts_mode() -> bool {
     cfg!(feature = "beasts")
 }
 
+/// Map the save must be on: the Route 38 gate for beasts, else the target map.
+pub const fn save_map() -> (u8, u8) {
+    #[cfg(feature = "beasts")]
+    {
+        GATE_MAP
+    }
+    #[cfg(not(feature = "beasts"))]
+    {
+        START_MAP
+    }
+}
+
 /// Beast finder: same walking, but stop on any beast encounter (no DV reset).
 pub const fn finder_mode() -> bool {
     cfg!(feature = "beastfinder")
@@ -519,14 +531,14 @@ impl Bot {
             };
         }
         if self.stage == Stage::NaturalA && beasts_mode() {
-            if !s.world || !s.shrine || obs.map != START_MAP || obs.battle != 0 {
-                return self.stop("Left gate door before start");
+            if !s.world || !s.shrine || obs.map != save_map() || obs.battle != 0 {
+                return self.stop("Left gate exit before start");
             }
-            self.enter(Stage::Cross, "Crossing gate: finding beast");
+            self.enter(Stage::Cross, "Stepping onto Route 38");
             self.crossings = 0;
             self.last_map = obs.map;
-            self.held = PAD_RIGHT;
-            return Output { motion: Motion::Run, buttons: PAD_RIGHT };
+            self.held = PAD_LEFT;
+            return Output { motion: Motion::Run, buttons: PAD_LEFT };
         }
         if self.stage == Stage::NaturalA && suicune_mode() {
             if !s.world || !s.shrine || obs.map != START_MAP {
@@ -683,11 +695,11 @@ impl Bot {
             }
             Stage::Load => {
                 if s.world {
-                    if !s.shrine || obs.map != START_MAP {
+                    if !s.shrine || obs.map != save_map() {
                         return self.stop(if suicune_mode() {
                             "Save not below Tin Tower door"
                         } else if beasts_mode() {
-                            "Save not on Route 38 gate door"
+                            "Save not at gate's Route 38 exit"
                         } else if static_mode() {
                             "Save not facing legendary"
                         } else {
@@ -778,7 +790,7 @@ impl Bot {
             Stage::NaturalDelay => {
                 self.held = 0;
                 if overworld_mode() {
-                    if !s.world || !s.shrine || obs.map != START_MAP || obs.battle != 0 {
+                    if !s.world || !s.shrine || obs.map != save_map() || obs.battle != 0 {
                         return self.stop("Moved off start tile");
                     }
                 } else if !s.gs_position {
@@ -1049,18 +1061,14 @@ impl Bot {
         match self.stage {
             Stage::Cross => {
                 if map == GATE_MAP {
-                    self.last_map = map;
+                    // Still inside the gate: keep walking onto the exit mat.
                     self.held = PAD_LEFT;
                 } else if map == START_MAP {
-                    // A held Left can carry one or two steps past the door
-                    // after the warp; stay on row 8 between the door and x=30.
-                    if s.y != START_XY_PUB.1 || s.x < 30 || s.x > START_XY_PUB.0 {
-                        return Some(self.stop("Off the gate door row"));
+                    // Arrived (Left may carry a step or two past the door).
+                    if !(s.y == 8 || s.y == 9) || s.x < 30 || s.x > START_XY_PUB.0 {
+                        return Some(self.stop("Off the gate door rows"));
                     }
-                    if self.last_map == GATE_MAP {
-                        self.last_map = map;
-                        self.crossings += 1;
-                    }
+                    self.crossings += 1;
                     if beast_on_map(s, START_MAP) {
                         if s.wram_bank & 7 > 1 {
                             return None;
@@ -1070,13 +1078,13 @@ impl Bot {
                         }
                         self.held = 0;
                         self.enter(Stage::ToGrass, "Beast on Route 38: to grass");
-                    } else if self.crossings > 150 {
-                        return Some(self.abort_attempt("No beast nearby: reset"));
                     } else {
-                        self.held = PAD_RIGHT;
+                        // Nothing met and nothing saved: reload, which scatters
+                        // the beasts again.
+                        return Some(self.abort_attempt("No beast arrived: reset"));
                     }
                 } else {
-                    return Some(self.stop("Unexpected map while crossing"));
+                    return Some(self.stop("Unexpected map leaving gate"));
                 }
             }
             Stage::ToGrass => {

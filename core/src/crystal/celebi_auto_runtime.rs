@@ -142,11 +142,18 @@ fn screen(stage: Stage) -> Screen {
         save_info: unsafe { TEXT_SAVE_INFO },
         world,
         // Start tile, facing up, no script running (wScriptMode == 0).
-        // Beasts: any facing on the Route 38 door tile.
-        shrine: gb_mem::read_u8(0xdcb8) == super::celebi_session::START_XY.0
-            && gb_mem::read_u8(0xdcb7) == super::celebi_session::START_XY.1
-            && (super::celebi_auto::beasts_mode() || gb_mem::read_u8(0xd4de) & 12 == 4)
-            && gb_mem::read_u8(0xd437) == 0,
+        // Beasts: inside the Route 38 gate, on the exit mat or the tile before
+        // it (x 0-1, y 4-5), any facing. Others: start tile facing up.
+        shrine: if super::celebi_auto::beasts_mode() {
+            gb_mem::read_u8(0xdcb8) <= 1
+                && (4..=5).contains(&gb_mem::read_u8(0xdcb7))
+                && gb_mem::read_u8(0xd437) == 0
+        } else {
+            gb_mem::read_u8(0xdcb8) == super::celebi_session::START_XY.0
+                && gb_mem::read_u8(0xdcb7) == super::celebi_session::START_XY.1
+                && gb_mem::read_u8(0xd4de) & 12 == 4
+                && gb_mem::read_u8(0xd437) == 0
+        },
         dialog: bank == 0x1b && (0x6e39..=0x6e42).contains(&pos),
         gs_position,
         gs: gs_position && unsafe { TEXT_GS },
